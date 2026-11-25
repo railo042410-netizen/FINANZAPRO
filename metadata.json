@@ -1,0 +1,6 @@
+{
+  "name": "FinanzaPro",
+  "description": "Plataforma inteligente de finanzas personales con separación de saldos, retención automática, metas de ahorro y analítica 50/30/20.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
