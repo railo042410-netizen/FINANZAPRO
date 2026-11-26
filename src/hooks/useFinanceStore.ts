@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createEmptyState, createSeedState } from '../data/seedData';
 import {
   AppSettings,
@@ -11,6 +11,11 @@ import {
   TransactionType,
 } from '../types/finance';
 import { getDefaultBucketForCategory, getTodayISO } from '../utils/formatters';
+import {
+  fetchSubFinance,
+  saveSubFinance,
+  type SubaccountSession,
+} from '../subaccount';
 
 const STORAGE_KEY = 'finanzapro_state_v1';
 
@@ -228,16 +233,39 @@ function buildDateForMonth(monthKey: string, dayOfMonth: number): string {
   return `${yearStr}-${monthStr}-${String(safeDay).padStart(2, '0')}`;
 }
 
-export function useFinanceStore() {
-  const [state, setState] = useState<FinanceState>(() => loadInitialState());
+export function useFinanceStore(remote: SubaccountSession | null = null) {
+  const [state, setState] = useState<FinanceState>(() =>
+    remote ? createEmptyState() : loadInitialState()
+  );
+  const remoteLoaded = useRef(false);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Ignore storage quota errors silently
+    if (!remote) return;
+    remoteLoaded.current = false;
+    fetchSubFinance(remote)
+      .then((data) => {
+        setState(normalizeState(data) ?? createEmptyState());
+        remoteLoaded.current = true;
+      })
+      .catch(() => {
+        remoteLoaded.current = true;
+      });
+  }, [remote]);
+
+  useEffect(() => {
+    if (!remote) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        // Ignore storage quota errors silently
+      }
+      return;
     }
-  }, [state]);
+    if (!remoteLoaded.current) return;
+    saveSubFinance(remote, state).catch(() => {
+      // La siguiente edición volverá a intentarlo.
+    });
+  }, [state, remote]);
 
   const addTransaction = useCallback(
     (input: Omit<Transaction, 'id' | 'createdAt'>) => {

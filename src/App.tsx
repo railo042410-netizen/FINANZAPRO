@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Plus, RotateCcw } from 'lucide-react';
 import { BackupSettingsView } from './components/BackupSettingsView';
 import { ChartsSection } from './components/ChartsSection';
@@ -13,6 +13,11 @@ import { Sidebar } from './components/Sidebar';
 import { TransactionModal } from './components/TransactionModal';
 import { TransactionsTable } from './components/TransactionsTable';
 import { useFinanceStore } from './hooks/useFinanceStore';
+import {
+  CUENTA_MAESTRA_URL,
+  initSubaccount,
+  type SubaccountSession,
+} from './subaccount';
 import {
   ActiveSection,
   FixedExpense,
@@ -40,6 +45,24 @@ const SECTION_TITLES: Record<ActiveSection, string> = {
 };
 
 export default function App() {
+  const [session, setSession] = useState<SubaccountSession | null>(null);
+  const [authStatus, setAuthStatus] = useState<'loading' | 'ready' | 'gate'>(
+    'loading'
+  );
+
+  useEffect(() => {
+    initSubaccount()
+      .then((linked) => {
+        if (linked) {
+          setSession(linked);
+          setAuthStatus('ready');
+        } else {
+          setAuthStatus('gate');
+        }
+      })
+      .catch(() => setAuthStatus('gate'));
+  }, []);
+
   const {
     state,
     addTransaction,
@@ -57,7 +80,7 @@ export default function App() {
     loadDemoData,
     exportBackupJson,
     importBackupJson,
-  } = useFinanceStore();
+  } = useFinanceStore(session);
 
   const currentMonth = getCurrentMonthKey();
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
@@ -221,6 +244,13 @@ export default function App() {
   const toggleHideTotalSavings = () => {
     updateSettings({ hideTotalSavings: !hideTotalSavings });
   };
+
+  if (authStatus === 'loading') {
+    return <div className="app center muted">Conectando con tu subcuenta…</div>;
+  }
+  if (authStatus === 'gate') {
+    return <AccessGate />;
+  }
 
   return (
     <div className="relative min-h-screen bg-[#140b06] text-stone-100 flex flex-col lg:flex-row overflow-x-hidden">
@@ -517,6 +547,34 @@ export default function App() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function AccessGate() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[#140b06]">
+      <div className="surface-card animate-pop max-w-md w-full p-8 space-y-4 text-center">
+        <div className="brand-mark mx-auto">CM</div>
+        <h1 className="neon-gradient text-xl font-semibold">
+          Acceso por subcuenta
+        </h1>
+        <p className="text-xs text-stone-300 leading-relaxed">
+          FinanzaPro solo se abre con una subcuenta emitida por Cuenta Maestra.
+          Tus datos quedan vinculados al dispositivo donde se instala y no se
+          pueden compartir.
+        </p>
+        <a
+          href={`${CUENTA_MAESTRA_URL}/?mode=sub`}
+          className="cta-vivid inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-xs font-semibold"
+        >
+          Ir a Cuenta Maestra
+        </a>
+        <p className="text-[11px] text-stone-400">
+          Si ya tienes una subcuenta, ábrela desde el panel de Cuenta Maestra con
+          el botón «Abrir FinanzaPro con esta subcuenta».
+        </p>
+      </div>
     </div>
   );
 }
